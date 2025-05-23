@@ -14,6 +14,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 @ExtendWith(MockitoExtension.class)
@@ -134,5 +136,57 @@ class UsuarioServiceTest {
             }
         }))).thenReturn(usuario);
     }
+    
+    //EL MÉTODO DORETURN: ALTERNATIVA A WHEN THENRETURN
+    
+    @Test
+    void ejemplosConDoReturn() {
+        // 1. Para métodos void (este caso usaría doNothing() o doThrow())
+        // No funciona: when(notificacionService.enviarNotificacionRegistro(any())).thenReturn(...);
+        doNothing().when(notificacionService).enviarNotificacionRegistro(any());
+
+        // 2. Con spies
+        List<String> listaSpy = spy(new ArrayList<>());
+
+        // Problema: Esto llama al método real size() que devuelve 0
+        // when(listaSpy.size()).thenReturn(10);
+
+        // Solución: usar doReturn() para evitar llamar al método real
+        doReturn(10).when(listaSpy).size();
+
+        // 3. Para excepciones (aunque también se puede usar when().thenThrow())
+        doThrow(new RuntimeException("Error simulado"))
+            .when(usuarioRepository).delete(anyLong());
+
+        // 4. Cuando el método puede tener efectos secundarios
+        // Problema: Si get(0) lanza IndexOutOfBoundsException, el test fallará
+        // when(listaSpy.get(0)).thenReturn("valor");
+
+        // Solución: doReturn() evita llamar al método real
+        doReturn("valor").when(listaSpy).get(0);
+    }
+
+    @Test
+    void ejemploConDoAnswer() {
+        // Usando doAnswer para responder dinámicamente según los argumentos
+        doAnswer(invocation -> {
+            Usuario usuario = invocation.getArgument(0);
+            // Simulamos lógica que asigna un ID al guardar
+            if (usuario.getId() == null) {
+                usuario.setId(1L);
+            }
+            return usuario;
+        }).when(usuarioRepository).save(any(Usuario.class));
+
+        // Uso
+        Usuario nuevoUsuario = new Usuario(null, "Nuevo Usuario", "nuevo@ejemplo.com");
+        Usuario guardado = usuarioService.crearUsuario(nuevoUsuario);
+
+        // El ID debe haber sido asignado por nuestro doAnswer
+        assertEquals(1L, guardado.getId());
+    }
+
+    
+    
 
 }
