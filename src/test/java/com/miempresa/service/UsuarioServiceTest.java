@@ -584,10 +584,66 @@ class UsuarioServiceTest {
             futuro.getId(); // get() propagará la excepción si ocurre durante la ejecución asíncrona
         });
         
-        // La causa real debe ser nuestra IllegalArgumentException
+        // La causa real debe ser nSuestra IllegalArgumentException
         assertTrue(exception.getCause() instanceof IllegalArgumentException);
         assertEquals("Email inválido", exception.getCause().getMessage());
     }
+    
+    //SPY VS MOCK: ENTENDIENDO LAS DIFERENCIAS
+    @Test
+    void ejemploConMock() {
+        // Creamos un mock de la interfaz
+        UsuarioRepository mockRepository = mock(UsuarioRepository.class);
+        
+        // Configuramos el comportamiento del mock
+        Usuario usuario = new Usuario(1L, "Nombre Test", "test@ejemplo.com");
+        when(mockRepository.findById(1L)).thenReturn(Optional.of(usuario));
+        
+        // Por defecto, los métodos no configurados devuelven valores por defecto
+        assertTrue(mockRepository.findAll().isEmpty());     // Lista vacía por defecto
+        assertFalse(mockRepository.existsById(2L));         // false por defecto
+        
+        // Los métodos configurados devuelven lo especificado
+        Optional<Usuario> resultado = mockRepository.findById(1L);
+        assertTrue(resultado.isPresent());
+        assertEquals("Nombre Test", resultado.get().getNombre());
+        
+        // Podemos verificar las interacciones
+        verify(mockRepository).findById(1L);
+    }
+
+    @Test
+    void ejemploConSpy() {
+        // Creamos un objeto real
+        List<String> listaReal = new ArrayList<>();
+        listaReal.add("uno");
+        listaReal.add("dos");
+        
+        // Creamos un spy sobre el objeto real
+        List<String> listaSpy = spy(listaReal);
+        
+        // Los métodos no configurados llaman a la implementación real
+        assertEquals(2, listaSpy.size());      // Llama al método real size()
+        assertEquals("uno", listaSpy.get(0));  // Llama al método real get()
+        
+        // Podemos modificar el comportamiento de algunos métodos
+        // IMPORTANTE: Usar doReturn para evitar llamar al método real durante la configuración
+        doReturn(100).when(listaSpy).size();
+        
+        // Ahora size() devuelve el valor mockeado
+        assertEquals(100, listaSpy.size());
+        
+        // Pero otros métodos siguen llamando a la implementación real
+        assertEquals("uno", listaSpy.get(0));
+        
+        // Podemos añadir elementos y el objeto real se actualiza
+        listaSpy.add("tres");
+        assertEquals(3, listaReal.size());    // La lista real tiene ahora 3 elementos
+        
+        // Verificación funciona igual que con mocks
+        verify(listaSpy, times(2)).get(0);
+    }
+
 
     
     
