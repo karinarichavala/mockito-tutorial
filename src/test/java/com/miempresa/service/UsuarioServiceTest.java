@@ -11,7 +11,7 @@ import java.util.Collections;
 import java.sql.SQLException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.miempresa.model.Usuario;
 import com.miempresa.repository.UsuarioRepository;
@@ -768,6 +768,119 @@ class UsuarioServiceTest {
             usuarioService.obtenerUsuario(1001L);
         });
     }
+    
+    //VERIFICANDO MÉTODOS VOID
+    
+    @Test
+    void verificacionBasicaMetodoVoid() {
+        // Arrange
+        Usuario usuario = new Usuario(1L, "Pedro García", "pedro@ejemplo.com");
+        when(usuarioRepository.save(any())).thenReturn(usuario);
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
+        
+        // Act: llamamos a métodos que ejecutan operaciones void
+        usuarioService.crearUsuario(usuario);
+        usuarioService.desactivarUsuario(1L);
+        
+        // Verify: verificamos que los métodos void fueron llamados
+        verify(notificacionService).enviarNotificacionRegistro(usuario);
+        verify(notificacionService).enviarNotificacionDesactivacion(any());
+    }
+
+    @Test
+    void verificarNumeroLlamadasVoid() {
+        // Arrange
+        Usuario usuario = new Usuario(1L, "Sandra Ruiz", "sandra@ejemplo.com");
+        when(usuarioRepository.save(any())).thenReturn(usuario);
+        when(usuarioRepository.findById(anyLong())).thenReturn(Optional.of(usuario));
+        
+        // Act: llamamos los métodos múltiples veces
+        usuarioService.crearUsuario(usuario);
+        usuarioService.desactivarUsuario(1L);
+        usuarioService.desactivarUsuario(2L);
+        usuarioService.desactivarUsuario(3L);
+        
+        // Verify: comprobamos el número exacto de llamadas
+        verify(notificacionService, times(1)).enviarNotificacionRegistro(any());
+        verify(notificacionService, times(3)).enviarNotificacionDesactivacion(any());
+        
+        // Alternativas para verificar número de llamadas
+        verify(notificacionService, atLeastOnce()).enviarNotificacionRegistro(any());
+        verify(notificacionService, atLeast(2)).enviarNotificacionDesactivacion(any());
+        verify(notificacionService, atMost(5)).enviarNotificacionDesactivacion(any());
+        verify(usuarioRepository, never()).delete(anyLong());
+    }
+
+    @Test
+    void capturarArgumentosMetodoVoid() {
+        // Arrange
+        Usuario usuario = new Usuario(1L, "Roberto Núñez", "roberto@ejemplo.com");
+        when(usuarioRepository.save(any())).thenReturn(usuario);
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
+        
+        // Preparamos captores de argumentos
+        ArgumentCaptor<Usuario> usuarioCaptor = ArgumentCaptor.forClass(Usuario.class);
+        ArgumentCaptor<String> operacionCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> detallesCaptor = ArgumentCaptor.forClass(String.class);
+        
+        // Act
+        usuarioService.crearUsuario(usuario);
+        usuarioService.desactivarUsuario(1L);
+        
+        // Verify: capturamos y analizamos los argumentos
+        verify(notificacionService, times(2)).enviarNotificacionRegistro(usuarioCaptor.capture());
+        verify(auditoriaService, atLeastOnce()).registrarOperacion(
+            operacionCaptor.capture(), detallesCaptor.capture());
+        
+        // Obtenemos todos los valores capturados
+        List<Usuario> usuariosCapturados = usuarioCaptor.getAllValues();
+        List<String> operacionesCapturadas = operacionCaptor.getAllValues();
+        
+        // Analizamos los valores capturados
+        assertEquals(2, usuariosCapturados.size());
+        assertEquals("Roberto Núñez", usuariosCapturados.get(0).getNombre());
+        assertTrue(operacionesCapturadas.contains("CREAR_USUARIO"));
+    }
+
+    @Test
+    void verificarNoLlamadaMetodoVoid() {
+        // Arrange: configuramos el repositorio para devolver Optional.empty()
+        when(usuarioRepository.findById(anyLong())).thenReturn(Optional.empty());
+        
+        // Act: intentamos desactivar un usuario que no existe
+        usuarioService.desactivarUsuario(99L);
+        
+        // Verify: no debería enviarse ninguna notificación ni guardarse nada
+        verify(notificacionService, never()).enviarNotificacionDesactivacion(any());
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    void verificarOrdenLlamadasVoid() {
+        // Arrange
+        Usuario usuario = new Usuario(1L, "Carolina Silva", "carolina@ejemplo.com");
+        when(usuarioRepository.save(any())).thenReturn(usuario);
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
+        
+        // Act: realizamos operaciones en cierto orden
+        usuarioService.crearUsuario(usuario);
+        usuarioService.desactivarUsuario(1L);
+        
+        // Verify: verificamos que las operaciones ocurrieron en el orden esperado
+        InOrder orden = inOrder(notificacionService, auditoriaService);
+        
+        // Primera debería enviarse la notificación de registro
+        orden.verify(notificacionService).enviarNotificacionRegistro(any());
+        
+        // Luego la notificación de desactivación
+        orden.verify(notificacionService).enviarNotificacionDesactivacion(any());
+        
+        // Y finalmente debería registrarse en auditoría (asumiendo que esto ocurre al final)
+        orden.verify(auditoriaService, atLeastOnce()).registrarOperacion(anyString(), anyString());
+    }
+
+    //ARGUMENT CAPTURE: ANÁLISIS DETALLADO DE ARGUMENTOS
+    
 
 
 
