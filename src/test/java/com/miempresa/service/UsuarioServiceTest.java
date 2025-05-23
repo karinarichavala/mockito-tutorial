@@ -18,6 +18,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import org.mockito.InOrder;
+import org.mockito.ArgumentCaptor;
+
+
+
+
 @ExtendWith(MockitoExtension.class)
 class UsuarioServiceTest {
 
@@ -185,8 +191,185 @@ class UsuarioServiceTest {
         // El ID debe haber sido asignado por nuestro doAnswer
         assertEquals(1L, guardado.getId());
     }
+    
+    //VERIFICANDO EL COMPORTAMIENTO DE MÉTODOS
+    
+    @Test
+    void verificacionBasica() {
+        // Arrange
+        Usuario usuario = new Usuario(1L, "David Ruiz", "david@ejemplo.com");
+        when(usuarioRepository.save(any(Usuario.class))).thenReturn(usuario);
+        
+        // Act
+        usuarioService.crearUsuario(usuario);
+        
+        // Verify: comprueba que el método fue llamado exactamente una vez
+        verify(usuarioRepository).save(usuario);
+        verify(notificacionService).enviarNotificacionRegistro(usuario);
+        verify(auditoriaService).registrarOperacion(anyString(), anyString());
+    }
+
+    @Test
+    void verificacionDeInvocaciones() {
+        // Arrange
+        Usuario usuario = new Usuario(1L, "Lucía Gómez", "lucia@ejemplo.com");
+        when(usuarioRepository.save(any())).thenReturn(usuario);
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
+        
+        // Act: llamamos a varios métodos
+        usuarioService.crearUsuario(usuario);
+        usuarioService.obtenerUsuario(1L);
+        usuarioService.obtenerUsuario(1L);
+        
+        // Verify con distintas verificaciones de número
+        verify(usuarioRepository, times(1)).save(any());
+        verify(usuarioRepository, times(2)).findById(1L);
+        verify(notificacionService, atLeastOnce()).enviarNotificacionRegistro(any());
+        verify(auditoriaService, atMost(3)).registrarOperacion(anyString(), anyString());
+        verify(usuarioRepository, never()).delete(anyLong());
+    }
+
+    @Test
+    void verificacionDeOrden() {
+        // Arrange
+        Usuario usuario = new Usuario(1L, "Martín Vázquez", "martin@ejemplo.com");
+        when(usuarioRepository.save(any())).thenReturn(usuario);
+        when(usuarioRepository.findById(anyLong())).thenReturn(Optional.of(usuario));
+        
+        // Act: realizamos varias operaciones
+        usuarioService.crearUsuario(usuario);
+        usuarioService.desactivarUsuario(1L);
+        
+        // Verify: comprobamos que las operaciones ocurrieron en cierto orden
+        InOrder orden = inOrder(usuarioRepository, notificacionService);
+        
+        // Primero debería guardarse el usuario y enviarse la notificación de registro
+        orden.verify(usuarioRepository).save(usuario);
+        orden.verify(notificacionService).enviarNotificacionRegistro(any());
+        
+        // Luego debería buscarse por ID, guardarse de nuevo y enviarse notificación de desactivación
+        orden.verify(usuarioRepository).findById(1L);
+        orden.verify(usuarioRepository).save(any());
+        orden.verify(notificacionService).enviarNotificacionDesactivacion(any());
+    }
+
+    @Test
+    void verificacionDeNoMasInteracciones() {
+        // Arrange
+        Usuario usuario = new Usuario(1L, "Teresa Blanco", "teresa@ejemplo.com");
+        when(usuarioRepository.save(any())).thenReturn(usuario);
+        
+        // Act
+        usuarioService.crearUsuario(usuario);
+        
+        // Verify: comprobamos las interacciones esperadas
+        verify(usuarioRepository).save(usuario);
+        verify(notificacionService).enviarNotificacionRegistro(usuario);
+        verify(auditoriaService).registrarOperacion(anyString(), anyString());
+        
+        // Verify: comprobamos que no hay más interacciones con estos mocks
+        verifyNoMoreInteractions(usuarioRepository, notificacionService);
+    }
+
+    @Test
+    void verificacionConArgumentCaptor() {
+        // Arrange
+        Usuario usuario = new Usuario(1L, "Sara Fernández", "sara@ejemplo.com");
+        when(usuarioRepository.save(any())).thenReturn(usuario);
+        
+        // Preparamos captores de argumentos
+        ArgumentCaptor<Usuario> usuarioCaptor = ArgumentCaptor.forClass(Usuario.class);
+        ArgumentCaptor<String> operacionCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> detallesCaptor = ArgumentCaptor.forClass(String.class);
+        
+        // Act
+        usuarioService.crearUsuario(usuario);
+    
+
+}
+    
+    //Mockeando Métodos Void
+
+    @Test
+    void mockearMetodoVoidConDoNothing() {
+        // Arrange: configuramos el mock para que no haga nada (comportamiento por defecto)
+        doNothing().when(notificacionService).enviarNotificacionRegistro(any(Usuario.class));
+        
+        // Alternativa: como no hacer nada es el comportamiento por defecto, 
+        // podríamos omitir esta configuración
+        
+        // Act
+        Usuario usuario = new Usuario(1L, "Raúl Torres", "raul@ejemplo.com");
+        when(usuarioRepository.save(any())).thenReturn(usuario);
+        usuarioService.crearUsuario(usuario);
+        
+        // Verify: comprobamos que el método fue llamado
+        verify(notificacionService).enviarNotificacionRegistro(usuario);
+    }
+
+    @Test
+    void mockearMetodoVoidConDoThrow() {
+        // Arrange: configuramos el mock para que lance una excepción
+        doThrow(new RuntimeException("Error en el envío de notificación"))
+            .when(notificacionService).enviarNotificacionRegistro(any(Usuario.class));
+        
+        // Act & Assert: verificamos que la excepción se propaga correctamente
+        Usuario usuario = new Usuario(1L, "Isabel Mora", "isabel@ejemplo.com");
+        when(usuarioRepository.save(any())).thenReturn(usuario);
+        
+        Exception exception = assertThrows(RuntimeException.class, () -> {
+            usuarioService.crearUsuario(usuario);
+        });
+        
+        assertTrue(exception.getMessage().contains("Error en el envío"));
+        
+        // Verify: el usuario debería haberse guardado antes de la excepción
+        verify(usuarioRepository).save(usuario);
+    }
+
+    @Test
+    void mockearMetodoVoidConDoAnswer() {
+        // Arrange: configuramos un comportamiento más complejo
+        doAnswer(invocation -> {
+            Usuario usuario = invocation.getArgument(0);
+            // Podríamos realizar alguna acción con el usuario
+            System.out.println("Simulando envío de notificación a: " + usuario.getEmail());
+            // No devolvemos nada ya que el método es void
+            return null;
+        }).when(notificacionService).enviarNotificacionRegistro(any(Usuario.class));
+        
+        // Act
+        Usuario usuario = new Usuario(1L, "Miguel Castro", "miguel@ejemplo.com");
+        when(usuarioRepository.save(any())).thenReturn(usuario);
+        usuarioService.crearUsuario(usuario);
+        
+        // Verify
+        verify(notificacionService).enviarNotificacionRegistro(usuario);
+    }
+
+    @Test
+    void mockearMetodoVoidSelectivamente() {
+        // Configuramos comportamientos diferentes según el argumento
+        Usuario usuarioValido = new Usuario(1L, "Paula Lima", "paula@ejemplo.com");
+        Usuario usuarioInvalido = new Usuario(2L, "Test Invalido", "test@ejemplo.com");
+        
+        // El método se comporta normalmente para la mayoría de usuarios
+        doNothing().when(notificacionService).enviarNotificacionRegistro(any(Usuario.class));
+        
+        // Pero lanza excepción para un usuario específico
+        doThrow(new RuntimeException("Email bloqueado"))
+            .when(notificacionService).enviarNotificacionRegistro(eq(usuarioInvalido));
+        
+        // Act & Assert: probamos el caso válido
+        when(usuarioRepository.save(any())).thenReturn(usuarioValido);
+        usuarioService.crearUsuario(usuarioValido); // No debería lanzar excepción
+        
+        // Act & Assert: probamos el caso inválido
+        when(usuarioRepository.save(any())).thenReturn(usuarioInvalido);
+        assertThrows(RuntimeException.class, () -> {
+            usuarioService.crearUsuario(usuarioInvalido);
+        });
+    }
 
     
-    
-
 }

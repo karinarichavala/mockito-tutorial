@@ -31,5 +31,15 @@ public class UsuarioService {
         return usuarioGuardado;
     }
 
+	public void obtenerUsuario(long l) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	public void desactivarUsuario(long l) {
+		// TODO Auto-generated method stub
+		
+	}
+
     // … tus otros métodos también deberán aceptar auditoriaService si lo usan
 }
