@@ -83,20 +83,7 @@
 		</dependency>
 		
 		<!-- Dependencias explícitas según el laboratorio -->
-		  <dependency>
-		    <groupId>org.junit.jupiter</groupId>
-		    <artifactId>junit-jupiter-api</artifactId>
-		    <version>${junit.version}</version>
-		    <scope>test</scope>
-		  </dependency>
-		  
-		  <dependency>
-		    <groupId>org.junit.jupiter</groupId>
-		    <artifactId>junit-jupiter-engine</artifactId>
-		    <version>${junit.version}</version>
-		    <scope>test</scope>
-		  </dependency>
-		  
+		 
 		  <dependency>
 		    <groupId>org.mockito</groupId>
 		    <artifactId>mockito-core</artifactId>
@@ -125,7 +112,7 @@
 			<plugin>
 		        <groupId>org.apache.maven.plugins</groupId>
 		        <artifactId>maven-surefire-plugin</artifactId>
-		        <version>2.22.2</version>
+		        <version>3.0.0-M7</version>
            </plugin>
 		</plugins>
 	</build>

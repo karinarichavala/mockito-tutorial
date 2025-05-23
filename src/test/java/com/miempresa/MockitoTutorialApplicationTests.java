@@ -1,4 +1,4 @@
-package com.miempresa.mockito_tutorial;
+package com.miempresa;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
