@@ -32,6 +32,7 @@ public class UsuarioService {
     }
 
 	public Optional<Usuario> obtenerUsuario(long l) {
+		return null;
 		// TODO Auto-generated method stub
 		
 	}
