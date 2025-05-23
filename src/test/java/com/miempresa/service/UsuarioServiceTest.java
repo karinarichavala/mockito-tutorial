@@ -643,6 +643,132 @@ class UsuarioServiceTest {
         // Verificación funciona igual que con mocks
         verify(listaSpy, times(2)).get(0);
     }
+    
+    //MOCKS CON MÚLTIPLES RETURNS
+    @Test
+    void multipleReturnsSecuenciales() {
+        // Configuramos respuestas secuenciales
+        when(usuarioRepository.findAll())
+            .thenReturn(Arrays.asList(new Usuario(1L, "Usuario1", "email1@ejemplo.com")))  // Primera llamada
+            .thenReturn(Arrays.asList(
+                new Usuario(2L, "Usuario2", "email2@ejemplo.com"),
+                new Usuario(3L, "Usuario3", "email3@ejemplo.com")))  // Segunda llamada
+            .thenReturn(Collections.emptyList());  // Tercera llamada y siguientes
+
+        // Primera llamada
+        List<Usuario> resultado1 = usuarioService.obtenerTodosLosUsuarios();
+        assertEquals(1, resultado1.size());
+        assertEquals("Usuario1", resultado1.get(0).getNombre());
+
+        // Segunda llamada
+        List<Usuario> resultado2 = usuarioService.obtenerTodosLosUsuarios();
+        assertEquals(2, resultado2.size());
+        assertEquals("Usuario2", resultado2.get(0).getNombre());
+        assertEquals("Usuario3", resultado2.get(1).getNombre());
+
+        // Tercera llamada
+        List<Usuario> resultado3 = usuarioService.obtenerTodosLosUsuarios();
+        assertTrue(resultado3.isEmpty());
+
+        // Cuarta llamada (sigue devolviendo el último valor configurado)
+        List<Usuario> resultado4 = usuarioService.obtenerTodosLosUsuarios();
+        assertTrue(resultado4.isEmpty());
+    }
+
+    @Test
+    void returnsYThrows() {
+        // Configuramos una secuencia que eventualmente lanza una excepción
+        when(usuarioRepository.findById(eq(1L)))
+            .thenReturn(Optional.of(new Usuario(1L, "Usuario Inicial", "inicial@ejemplo.com")))
+            .thenReturn(Optional.of(new Usuario(1L, "Usuario Actualizado", "actualizado@ejemplo.com")))
+            .thenThrow(new RuntimeException("Base de datos no disponible"));
+
+        // Primera llamada - devuelve valor
+        Optional<Usuario> resultado1 = usuarioService.obtenerUsuario(1L);
+        assertTrue(resultado1.isPresent());
+        assertEquals("Usuario Inicial", resultado1.get().getNombre());
+
+        // Segunda llamada - devuelve otro valor
+        Optional<Usuario> resultado2 = usuarioService.obtenerUsuario(1L);
+        assertTrue(resultado2.isPresent());
+        assertEquals("Usuario Actualizado", resultado2.get().getNombre());
+
+        // Tercera llamada - lanza excepción
+        Exception exception = assertThrows(RuntimeException.class, () -> {
+            usuarioService.obtenerUsuario(1L);
+        });
+        assertEquals("Base de datos no disponible", exception.getMessage());
+    }
+
+    @Test
+    void respuestasDinamicas() {
+        // Usamos un contador atómico para llevar la cuenta de las llamadas
+        AtomicInteger contador = new AtomicInteger(0);
+
+        // Configuramos un comportamiento dinámico basado en el contador
+        when(usuarioRepository.findById(anyLong())).thenAnswer(invocation -> {
+            Long id = invocation.getArgument(0);
+            int numLlamada = contador.getAndIncrement();
+
+            if (numLlamada == 0) {
+                return Optional.of(new Usuario(id, "Primera llamada", "primera@ejemplo.com"));
+            } else if (numLlamada == 1) {
+                return Optional.of(new Usuario(id, "Segunda llamada", "segunda@ejemplo.com"));
+            } else if (numLlamada < 5) {
+                return Optional.of(new Usuario(id, "Llamada intermedia", "intermedia@ejemplo.com"));
+            } else {
+                throw new RuntimeException("Demasiadas consultas");
+            }
+        });
+
+        // Probamos el comportamiento dinámico
+        for (int i = 0; i < 5; i++) {
+            Optional<Usuario> resultado = usuarioService.obtenerUsuario(5L);
+            assertTrue(resultado.isPresent());
+            if (i == 0) {
+                assertEquals("Primera llamada", resultado.get().getNombre());
+            } else if (i == 1) {
+                assertEquals("Segunda llamada", resultado.get().getNombre());
+            } else {
+                assertEquals("Llamada intermedia", resultado.get().getNombre());
+            }
+        }
+
+        // La sexta llamada debería lanzar excepción
+        assertThrows(RuntimeException.class, () -> {
+            usuarioService.obtenerUsuario(5L);
+        });
+    }
+
+    @Test
+    void returnsPorArgumentos() {
+        // Configuramos diferentes respuestas según el ID
+        when(usuarioRepository.findById(eq(1L)))
+            .thenReturn(Optional.of(new Usuario(1L, "Admin", "admin@ejemplo.com")));
+
+        when(usuarioRepository.findById(eq(2L)))
+            .thenReturn(Optional.of(new Usuario(2L, "Usuario", "usuario@ejemplo.com")));
+
+        when(usuarioRepository.findById(eq(3L)))
+            .thenReturn(Optional.empty());
+
+        when(usuarioRepository.findById(argThat(id -> id > 1000)))
+            .thenThrow(new RuntimeException("ID fuera de rango"));
+
+        // Probamos diferentes IDs
+        assertTrue(usuarioService.obtenerUsuario(1L).isPresent());
+        assertEquals("Admin", usuarioService.obtenerUsuario(1L).get().getNombre());
+
+        assertTrue(usuarioService.obtenerUsuario(2L).isPresent());
+        assertEquals("Usuario", usuarioService.obtenerUsuario(2L).get().getNombre());
+
+        assertFalse(usuarioService.obtenerUsuario(3L).isPresent());
+
+        assertThrows(RuntimeException.class, () -> {
+            usuarioService.obtenerUsuario(1001L);
+        });
+    }
+
 
 
     
