@@ -13,4 +13,6 @@ public class NotificacionServiceImpl implements NotificacionService {
     public void enviarNotificacionDesactivacion(Usuario usuario) {
         System.out.println("Enviando notificación de desactivación a " + usuario.getEmail());
     }
+    
+    
 }
