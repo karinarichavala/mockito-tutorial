@@ -18,6 +18,7 @@ import com.miempresa.repository.UsuarioRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatcher;
+import org.mockito.Captor;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -879,7 +880,165 @@ class UsuarioServiceTest {
         orden.verify(auditoriaService, atLeastOnce()).registrarOperacion(anyString(), anyString());
     }
 
-    //ARGUMENT CAPTURE: ANÁLISIS DETALLADO DE ARGUMENTOS
+    //ARGUMENT CAPTURE: ANÁLISIS DETALLADO DE ARGUMENTOS   
+    @Test
+    void capturaBasicaDeArgumentos() {
+        // Creamos un captor para el tipo Usuario
+        ArgumentCaptor<Usuario> usuarioCaptor = ArgumentCaptor.forClass(Usuario.class);
+
+        // Simulamos una operación
+        Usuario usuario = new Usuario(1L, "Marta López", "marta@ejemplo.com");
+        when(usuarioRepository.save(any())).thenReturn(usuario);
+        usuarioService.crearUsuario(usuario);
+
+        // Verificamos la llamada y capturamos el argumento
+        verify(usuarioRepository).save(usuarioCaptor.capture());
+
+        // Accedemos al valor capturado
+        Usuario usuarioCapturado = usuarioCaptor.getValue();
+
+        // Realizamos verificaciones sobre el valor capturado
+        assertEquals("Marta López", usuarioCapturado.getNombre());
+        assertEquals("marta@ejemplo.com", usuarioCapturado.getEmail());
+        assertTrue(usuarioCapturado.isActivo());
+    }
+
+    @Test
+    void capturaMultiplesArgumentos() {
+        // Captores para diferentes argumentos
+        ArgumentCaptor<String> tipoCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> detallesCaptor = ArgumentCaptor.forClass(String.class);
+        // Simulamos varias operaciones
+        Usuario usuario1 = new Usuario(1L, "Ana Gil", "ana@ejemplo.com");
+        Usuario usuario2 = new Usuario(2L, "Mario Ros", "mario@ejemplo.com");
+        when(usuarioRepository.save(any()))
+            .thenReturn(usuario1)
+            .thenReturn(usuario2);
+        when(usuarioRepository.findById(anyLong()))
+            .thenReturn(Optional.of(usuario1));
+
+        usuarioService.crearUsuario(usuario1);
+        usuarioService.crearUsuario(usuario2);
+        usuarioService.desactivarUsuario(1L);
+        // Verificamos y capturamos todas las llamadas
+        verify(auditoriaService, times(3)).registrarOperacion(
+            tipoCaptor.capture(), detallesCaptor.capture());
+        // Obtenemos todas las capturas
+        List<String> tipos = tipoCaptor.getAllValues();
+        List<String> detalles = detallesCaptor.getAllValues();
+        // Verificamos los valores capturados
+        assertEquals(3, tipos.size());
+        assertEquals(3, detalles.size());
+        // Verificamos el contenido específico
+        assertTrue(tipos.contains("CREAR_USUARIO"));
+        assertTrue(tipos.contains("DESACTIVAR_USUARIO"));
+        boolean encontradoAna = detalles.stream().anyMatch(d -> d.contains("Ana Gil"));
+        boolean encontradoMario = detalles.stream().anyMatch(d -> d.contains("Mario Ros"));
+        assertTrue(encontradoAna, "Debería encontrarse Ana en los detalles");
+        assertTrue(encontradoMario, "Debería encontrarse Mario en los detalles");
+    }
+
+    @Test
+    void verificacionesAvanzadasConCaptura() {
+        // Simulamos una implementación adicional
+        class UsuarioServiceExtendido extends UsuarioService {
+            public UsuarioServiceExtendido(UsuarioRepository repo,
+                                           NotificacionService notif,
+                                           AuditoriaService audit) {
+                super(repo, notif, audit);
+            }
+
+            public List<Usuario> crearUsuariosEnLote(List<Usuario> usuarios) {
+                List<Usuario> resultado = new ArrayList<>();
+                for (Usuario u : usuarios) {
+                    if (u.getEmail() != null && u.getEmail().contains("@")) {
+                        Usuario guardado = usuarioRepository.save(u);
+                        notificacionService.enviarNotificacionRegistro(guardado);
+                        resultado.add(guardado);
+                    }
+                }
+                auditoriaService.registrarOperacion("CREAR_LOTE",
+                    "Creados " + resultado.size() + " usuarios en lote");
+                return resultado;
+            }
+        }
+
+        // Creamos una instancia del servicio extendido
+        UsuarioServiceExtendido servicioExtendido = new UsuarioServiceExtendido(
+            usuarioRepository, notificacionService, auditoriaService);
+
+        // Preparamos datos y captores
+        ArgumentCaptor<Usuario> usuarioCaptor = ArgumentCaptor.forClass(Usuario.class);
+
+        List<Usuario> loteUsuarios = Arrays.asList(
+            new Usuario(1L, "User1", "user1@ejemplo.com"),
+            new Usuario(2L, "User2", "user2@ejemplo.com"),
+            new Usuario(3L, "User3", "emailinvalido"),  // Email inválido
+            new Usuario(4L, "User4", "user4@ejemplo.com")
+        );
+
+        // Configuramos el mock para devolver el mismo usuario que recibe
+        when(usuarioRepository.save(any()))
+            .thenAnswer(i -> i.getArgument(0));
+
+        // Act
+        List<Usuario> resultado = servicioExtendido.crearUsuariosEnLote(loteUsuarios);
+
+        // Verify: capturamos todos los usuarios guardados
+        verify(usuarioRepository, times(3)).save(usuarioCaptor.capture());
+
+        // Obtenemos los valores capturados
+        List<Usuario> usuariosGuardados = usuarioCaptor.getAllValues();
+
+        // Verificaciones avanzadas
+        assertEquals(3, usuariosGuardados.size());
+        assertEquals(3, resultado.size());
+
+        // Verificamos que no se guardó el usuario con email inválido
+        boolean encontradoInvalido = usuariosGuardados.stream()
+            .anyMatch(u -> "User3".equals(u.getNombre()));
+        assertFalse(encontradoInvalido, "No debería guardarse el usuario con email inválido");
+
+        // Verificamos que se enviaron las notificaciones correctas
+        verify(notificacionService, times(3)).enviarNotificacionRegistro(any());
+
+        // Y verificamos la auditoría
+        verify(auditoriaService)
+            .registrarOperacion(eq("CREAR_LOTE"), contains("3 usuarios"));
+    }
+
+    @ExtendWith(MockitoExtension.class)
+    class ArgumentCaptorAnotacionesTest {
+        @Mock private UsuarioRepository usuarioRepository;
+        @Mock private NotificacionService notificacionService;
+        @Mock private AuditoriaService auditoriaService;
+        @InjectMocks private UsuarioService usuarioService;
+        @Captor private ArgumentCaptor<Usuario> usuarioCaptor;
+        @Captor private ArgumentCaptor<String> stringCaptor;
+
+        @Test
+        void testCapturadorConAnotaciones() {
+            // Arrange
+            Usuario usuario = new Usuario(1L, "Jaime Vega", "jaime@ejemplo.com");
+            when(usuarioRepository.save(any())).thenReturn(usuario);
+
+            // Act
+            usuarioService.crearUsuario(usuario);
+
+            // Verify con los captores ya inyectados
+            verify(usuarioRepository).save(usuarioCaptor.capture());
+            verify(auditoriaService).registrarOperacion(eq("CREAR_USUARIO"), stringCaptor.capture());
+
+            // Accedemos a los valores capturados
+            Usuario usuarioCaptado = usuarioCaptor.getValue();
+            String detallesCaptados = stringCaptor.getValue();
+
+            // Verificamos
+            assertEquals("Jaime Vega", usuarioCaptado.getNombre());
+            assertTrue(detallesCaptados.contains("Jaime Vega"));
+        }
+    }
+
     
 
 
